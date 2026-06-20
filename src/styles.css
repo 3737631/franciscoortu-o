@@ -1,0 +1,175 @@
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-deep: #050505;
+  --bg-charcoal: #0a0a0a;
+  --gold: #c5a059;
+  --bone: #f2f2f2;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #222 var(--bg-deep);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-deep);
+  color: var(--bone);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* ─── Noise overlay ─── */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* ─── Hero section ─── */
+.hero-section {
+  min-height: 300vh;
+  position: relative;
+}
+
+.hero-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100vh;
+  width: 100%;
+}
+
+/* ─── Text side ─── */
+.hero-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4rem 3rem 4rem 5rem;
+  position: relative;
+  z-index: 2;
+}
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 0.8rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(3.2rem, 6vw, 5.5rem);
+  line-height: 1.05;
+  color: var(--bone);
+  font-style: italic;
+}
+
+.subtitle {
+  font-family: var(--font-sans);
+  font-weight: 300;
+  font-size: 1rem;
+  color: rgba(242, 242, 242, 0.5);
+  margin-top: 1.5rem;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+  max-width: 28rem;
+}
+
+/* ─── Visual side ─── */
+.hero-visual {
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+}
+
+.hero-visual canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.visual-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 120% 100% at 0% 50%,
+    var(--bg-deep) 0%,
+    transparent 40%
+  );
+}
+
+/* ─── Spacer / next section ─── */
+.spacer-section {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spacer-content {
+  text-align: center;
+  opacity: 0.3;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .hero-text {
+    padding: 3rem 2rem 1rem;
+    align-items: center;
+    text-align: center;
+  }
+
+  .subtitle {
+    max-width: none;
+  }
+
+  .hero-visual {
+    height: 50vh;
+  }
+
+  .visual-fade {
+    background: linear-gradient(
+      to bottom,
+      var(--bg-deep) 0%,
+      transparent 30%
+    );
+  }
+}
