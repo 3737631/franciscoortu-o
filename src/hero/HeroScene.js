@@ -7,43 +7,40 @@ import { createChromaKeyMaterial } from './ChromaKeyShader.js'
 export class HeroScene {
   constructor(container) {
     this.container = container
-    this.rect      = container.getBoundingClientRect()
-    this.w         = this.rect.width
-    this.h         = this.rect.height
+    const r       = container.getBoundingClientRect()
+    this.w        = r.width
+    this.h        = r.height
 
-    /* ── Renderer ── */
-    const gl = this.renderer = new THREE.WebGLRenderer({
+    /* Renderer — sin alpha, fondo sólido como la página */
+    this.renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: true,
+      alpha: false,
       powerPreference: 'high-performance',
     })
-    gl.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    gl.setSize(this.w, this.h)
-    gl.setClearColor(0x000000, 0)
-    gl.outputColorSpace = THREE.SRGBColorSpace
-    container.appendChild(gl.domElement)
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer.setSize(this.w, this.h)
+    this.renderer.setClearColor(0x020202)
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.2
+    container.appendChild(this.renderer.domElement)
 
-    /* ── Scene ── */
     this.scene = new THREE.Scene()
+    this.scene.background = new THREE.Color(0x020202)
 
-    /* ── Orthographic camera ── */
-    const aspect = this.w / this.h
-    this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0.1, 100)
+    const a = this.w / this.h
+    this.camera = new THREE.OrthographicCamera(-a, a, 1, -1, 0.1, 100)
     this.camera.position.z = 1
 
-    /* ── Post-processing ── */
-    this.composer = new EffectComposer(gl)
+    this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(this.w, this.h),
-      1.6,   /* strength */
-      0.35,  /* radius */
-      0.75,  /* threshold */
+      1.8, 0.3, 0.7,
     )
     this.composer.addPass(this.bloomPass)
 
-    /* ── State ── */
     this.video      = null
     this.texture    = null
     this.material   = null
@@ -52,51 +49,48 @@ export class HeroScene {
     this._destroyed = false
     this._raf       = null
 
-    window.addEventListener('resize', this._onResize.bind(this))
+    this._onResize = () => this.resize()
+    window.addEventListener('resize', this._onResize)
   }
 
-  /* ── Load video & build scene ── */
-  async load(videoSrc, matOptions = {}) {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video')
-      video.src         = videoSrc
-      video.muted       = true
-      video.playsInline = true
-      video.preload     = 'auto'
-      video.crossOrigin = 'anonymous'
+  async load(src, opts = {}) {
+    const video = document.createElement('video')
+    video.src         = src
+    video.muted       = true
+    video.playsInline = true
+    video.preload     = 'auto'
+    video.crossOrigin = 'anonymous'
+    video.style.display = 'none'
+    document.body.appendChild(video)
+    this.video = video
 
-      const onMeta = () => {
-        video.removeEventListener('error', onError)
-        video.removeEventListener('loadedmetadata', onMeta)
-        this._buildScene(video, matOptions)
+    return new Promise((resolve, reject) => {
+      const ok = () => {
+        video.removeEventListener('loadeddata', ok)
+        video.removeEventListener('error', err)
+        /* Activa decoder: play + pause inmediato */
+        video.play().then(() => video.pause()).catch(() => {})
+        this._buildScene(video, opts)
         this._ready = true
         resolve(video)
       }
-      const onError = () => {
-        video.removeEventListener('error', onError)
-        reject(new Error('Video load failed'))
-      }
-
-      video.addEventListener('loadedmetadata', onMeta, { once: true })
-      video.addEventListener('error', onError, { once: true })
+      const err = () => { video.removeEventListener('error', err); reject(new Error('Video load failed')) }
+      video.addEventListener('loadeddata', ok, { once: true })
+      video.addEventListener('error', err, { once: true })
       video.load()
     })
   }
 
-  _buildScene(video, matOptions) {
-    this.video = video
-
+  _buildScene(video, opts) {
     this.texture = new THREE.VideoTexture(video)
     this.texture.colorSpace = THREE.SRGBColorSpace
-    this.texture.minFilter  = THREE.LinearFilter
-    this.texture.magFilter  = THREE.LinearFilter
+    this.texture.minFilter = THREE.LinearFilter
+    this.texture.magFilter = THREE.LinearFilter
 
-    this.material = createChromaKeyMaterial(this.texture, matOptions)
+    this.material = createChromaKeyMaterial(this.texture, opts)
 
-    const vw = video.videoWidth
-    const vh = video.videoHeight
-    const vA = vw / vh
-    const cA = this.w / this.h
+    const vw = video.videoWidth, vh = video.videoHeight
+    const vA = vw / vh, cA = this.w / this.h
     let pw, ph
     if (vA > cA) { ph = 2; pw = ph * vA }
     else         { pw = 2 * cA; ph = pw / vA }
@@ -105,7 +99,6 @@ export class HeroScene {
     this.scene.add(this.mesh)
   }
 
-  /* ── Render loop ── */
   start() {
     if (this._raf) return
     const loop = () => {
@@ -121,37 +114,27 @@ export class HeroScene {
     if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null }
   }
 
-  /* ── Scroll sync ── */
   setTime(seconds) {
     if (!this.video || !this._ready) return
-    const t = Math.min(Math.max(seconds, 0), this.video.duration || Infinity)
-    if (Math.abs(this.video.currentTime - t) > 0.016) {
-      this.video.currentTime = t
-    }
+    const t = Math.min(Math.max(seconds, 0), this.video.duration || 5)
+    try { this.video.currentTime = t } catch (_) {}
   }
 
-  /* ── Resize ── */
-  _onResize() {
+  resize() {
     if (this._destroyed) return
     const r = this.container.getBoundingClientRect()
-    this.w = r.width
-    this.h = r.height
-
+    this.w = r.width; this.h = r.height
     this.renderer.setSize(this.w, this.h)
     this.composer.setSize(this.w, this.h)
-
-    const aspect = this.w / this.h
-    this.camera.left   = -aspect
-    this.camera.right  =  aspect
-    this.camera.top    =  1
-    this.camera.bottom = -1
+    const a = this.w / this.h
+    this.camera.left = -a; this.camera.right = a
+    this.camera.top = 1; this.camera.bottom = -1
     this.camera.updateProjectionMatrix()
-
     if (this.video && this.video.videoWidth) {
       const vA = this.video.videoWidth / this.video.videoHeight
       let pw, ph
-      if (vA > aspect) { ph = 2; pw = ph * vA }
-      else             { pw = 2 * aspect; ph = pw / vA }
+      if (vA > a) { ph = 2; pw = ph * vA }
+      else        { pw = 2 * a; ph = pw / vA }
       if (this.mesh) {
         this.mesh.geometry.dispose()
         this.mesh.geometry = new THREE.PlaneGeometry(pw, ph)
@@ -159,15 +142,15 @@ export class HeroScene {
     }
   }
 
-  /* ── Cleanup ── */
   destroy() {
     this._destroyed = true
     this.stop()
     window.removeEventListener('resize', this._onResize)
-    if (this.video) { this.video.pause(); this.video.src = ''; this.video.load() }
+    if (this.video && this.video.parentNode) this.video.parentNode.removeChild(this.video)
     this.texture?.dispose()
     this.material?.dispose()
-    if (this.mesh) { this.mesh.geometry.dispose(); this.scene.remove(this.mesh) }
+    this.mesh?.geometry.dispose()
+    if (this.mesh) this.scene.remove(this.mesh)
     this.renderer.dispose()
     this.container.querySelector('canvas')?.remove()
   }
