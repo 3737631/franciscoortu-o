@@ -7,8 +7,7 @@
 }
 
 :root {
-  --bg-deep:   #020202;
-  --bg-mid:    #0a0a0a;
+  --bg-page:   #0a0a0a;
   --gold:      #c5a059;
   --bone:      #f4f4f4;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -18,15 +17,12 @@
 html {
   scrollbar-width: thin;
   scrollbar-color: #222 transparent;
-  background: var(--bg-deep);
+  background: var(--bg-page);
 }
 
 body {
   font-family: var(--font-sans);
-  background:
-    radial-gradient(ellipse 80% 80% at 50% 0%, var(--bg-mid) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 50% at 50% 100%, var(--bg-mid) 0%, transparent 60%),
-    var(--bg-deep);
+  background: var(--bg-page);
   color: var(--bone);
   overflow-x: hidden;
   min-height: 100vh;
@@ -148,7 +144,7 @@ body {
   pointer-events: none;
   background: radial-gradient(
     ellipse 130% 100% at 0% 50%,
-    var(--bg-deep) 0%,
+    var(--bg-page) 0%,
     transparent 45%
   );
 }
@@ -208,7 +204,7 @@ body {
   .visual-fade {
     background: linear-gradient(
       to bottom,
-      var(--bg-deep) 0%,
+      var(--bg-page) 0%,
       transparent 30%
     );
   }

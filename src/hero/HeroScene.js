@@ -1,25 +1,22 @@
-import * as THREE from 'three'
-import { createChromaKeyMaterial } from './ChromaKeyShader.js'
-
 export class HeroScene {
-  constructor(container) {
+  constructor(container, bgColor = '#020202') {
     this.container = container
     const r       = container.getBoundingClientRect()
     this.w        = r.width
     this.h        = r.height
 
+    /* Renderer */
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(this.w, this.h)
-    this.renderer.setClearColor(0x020202)
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.0
+    this.renderer.setClearColor(bgColor)
     container.appendChild(this.renderer.domElement)
 
+    /* Scene con el mismo color de fondo */
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x020202)
+    this.scene.background = new THREE.Color(bgColor)
 
+    /* Cámara */
     const a = this.w / this.h
     this.camera = new THREE.OrthographicCamera(-a, a, 1, -1, 0.1, 100)
     this.camera.position.z = 1
@@ -29,14 +26,15 @@ export class HeroScene {
     this.material = null
     this.mesh     = null
     this._ready   = false
-    this._destroyed = false
+    this._dead    = false
     this._raf     = null
+    this._bgColor = bgColor
 
     this._resize = () => this.resize()
     window.addEventListener('resize', this._resize)
   }
 
-  async load(src, opts = {}) {
+  async load(src) {
     const video = document.createElement('video')
     video.src         = src
     video.muted       = true
@@ -51,8 +49,7 @@ export class HeroScene {
       const ok = () => {
         video.removeEventListener('loadeddata', ok)
         video.removeEventListener('error', err)
-        video.play().then(() => video.pause()).catch(() => {})
-        this._build(video, opts)
+        this._build(video)
         this._ready = true
         resolve(video)
       }
@@ -63,13 +60,16 @@ export class HeroScene {
     })
   }
 
-  _build(video, opts) {
+  _build(video) {
     this.texture = new THREE.VideoTexture(video)
     this.texture.colorSpace = THREE.SRGBColorSpace
     this.texture.minFilter = THREE.LinearFilter
     this.texture.magFilter = THREE.LinearFilter
 
-    this.material = createChromaKeyMaterial(this.texture, opts)
+    this.material = new THREE.MeshBasicMaterial({
+      map: this.texture,
+      toneMapped: false,
+    })
 
     const vw = video.videoWidth, vh = video.videoHeight
     const vA = vw / vh, cA = this.w / this.h
@@ -84,7 +84,7 @@ export class HeroScene {
   start() {
     if (this._raf) return
     const loop = () => {
-      if (this._destroyed) return
+      if (this._dead) return
       if (this._ready && this.texture) this.texture.needsUpdate = true
       this.renderer.render(this.scene, this.camera)
       this._raf = requestAnimationFrame(loop)
@@ -102,8 +102,14 @@ export class HeroScene {
     try { this.video.currentTime = s } catch (_) {}
   }
 
+  setBgColor(color) {
+    this._bgColor = color
+    this.renderer.setClearColor(color)
+    this.scene.background = new THREE.Color(color)
+  }
+
   resize() {
-    if (this._destroyed) return
+    if (this._dead) return
     const r = this.container.getBoundingClientRect()
     this.w = r.width; this.h = r.height
     this.renderer.setSize(this.w, this.h)
@@ -124,7 +130,7 @@ export class HeroScene {
   }
 
   destroy() {
-    this._destroyed = true
+    this._dead = true
     this.stop()
     window.removeEventListener('resize', this._resize)
     if (this.video && this.video.parentNode) this.video.parentNode.removeChild(this.video)
