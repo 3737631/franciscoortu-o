@@ -46,14 +46,20 @@ export class HeroScene {
     this.video = video
 
     return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Timeout')), 15000)
       const ok = () => {
+        clearTimeout(timeout)
         video.removeEventListener('loadeddata', ok)
         video.removeEventListener('error', err)
         this._build(video)
         this._ready = true
         resolve(video)
       }
-      const err = () => { video.removeEventListener('error', err); reject(new Error('Video load failed')) }
+      const err = () => {
+        clearTimeout(timeout)
+        video.removeEventListener('error', err)
+        reject(new Error('Video load failed'))
+      }
       video.addEventListener('loadeddata', ok, { once: true })
       video.addEventListener('error', err, { once: true })
       video.load()
