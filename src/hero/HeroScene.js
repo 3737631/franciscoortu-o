@@ -1,24 +1,17 @@
 export class HeroScene {
-  constructor(container, bgColor = '#020202') {
+  constructor(container) {
     this.container = container
     const r       = container.getBoundingClientRect()
     this.w        = r.width
     this.h        = r.height
 
-    /* Renderer */
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(this.w, this.h)
-    this.renderer.setClearColor(bgColor)
     container.appendChild(this.renderer.domElement)
 
-    /* Scene con el mismo color de fondo */
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(bgColor)
-
-    /* Cámara */
-    const a = this.w / this.h
-    this.camera = new THREE.OrthographicCamera(-a, a, 1, -1, 0.1, 100)
+    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100)
     this.camera.position.z = 1
 
     this.video    = null
@@ -28,9 +21,7 @@ export class HeroScene {
     this._ready   = false
     this._dead    = false
     this._raf     = null
-    this._bgColor = bgColor
-
-    this._resize = () => this.resize()
+    this._resize  = () => this.resize()
     window.addEventListener('resize', this._resize)
   }
 
@@ -46,14 +37,14 @@ export class HeroScene {
     this.video = video
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timeout')), 15000)
+      const timeout = setTimeout(() => reject(new Error('Timeout 15s')), 15000)
       const ok = () => {
         clearTimeout(timeout)
         video.removeEventListener('loadeddata', ok)
         video.removeEventListener('error', err)
         this._build(video)
         this._ready = true
-        resolve(video)
+        resolve({ video, bgColor: this._bgColor })
       }
       const err = () => {
         clearTimeout(timeout)
@@ -67,6 +58,19 @@ export class HeroScene {
   }
 
   _build(video) {
+    /* Detectar color de fondo del primer frame */
+    this._bgColor = this._sampleBgColor(video)
+
+    /* Aplicar color al scene */
+    this.scene.background = new THREE.Color(this._bgColor)
+    this.renderer.setClearColor(this._bgColor)
+
+    /* Ajustar cámara al aspect ratio del container */
+    const a = this.w / this.h
+    this.camera.left = -a
+    this.camera.right = a
+    this.camera.updateProjectionMatrix()
+
     this.texture = new THREE.VideoTexture(video)
     this.texture.colorSpace = THREE.SRGBColorSpace
     this.texture.minFilter = THREE.LinearFilter
@@ -85,6 +89,33 @@ export class HeroScene {
 
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), this.material)
     this.scene.add(this.mesh)
+  }
+
+  /* Muestra el primer frame en un canvas y extrae el color de las esquinas */
+  _sampleBgColor(video) {
+    const c = document.createElement('canvas')
+    c.width = video.videoWidth
+    c.height = video.videoHeight
+    const ctx = c.getContext('2d')
+    ctx.drawImage(video, 0, 0)
+    const w = c.width, h = c.height
+    const corners = [
+      ctx.getImageData(0, 0, 1, 1).data,                   /* top-left */
+      ctx.getImageData(w - 1, 0, 1, 1).data,               /* top-right */
+      ctx.getImageData(0, h - 1, 1, 1).data,               /* bottom-left */
+      ctx.getImageData(w - 1, h - 1, 1, 1).data,           /* bottom-right */
+      ctx.getImageData(Math.floor(w / 2), 0, 1, 1).data,   /* top-center */
+      ctx.getImageData(Math.floor(w / 2), h - 1, 1, 1).data, /* bottom-center */
+    ]
+    /* Promediar los colores */
+    let r = 0, g = 0, b = 0
+    for (const p of corners) { r += p[0]; g += p[1]; b += p[2] }
+    r = Math.round(r / corners.length)
+    g = Math.round(g / corners.length)
+    b = Math.round(b / corners.length)
+    const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
+    c.remove()
+    return hex
   }
 
   start() {
@@ -106,12 +137,6 @@ export class HeroScene {
     if (!this.video || !this._ready) return
     const s = Math.min(Math.max(t, 0), this.video.duration || 5)
     try { this.video.currentTime = s } catch (_) {}
-  }
-
-  setBgColor(color) {
-    this._bgColor = color
-    this.renderer.setClearColor(color)
-    this.scene.background = new THREE.Color(color)
   }
 
   resize() {

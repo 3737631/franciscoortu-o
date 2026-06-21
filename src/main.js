@@ -1,32 +1,29 @@
 import { HeroScene } from './hero/HeroScene.js'
 
-const P = new URLSearchParams(location.search)
-const BG = P.get('bg') || '#0a0a0a'
-
-/* Sincronizar fondo de la página con el fondo del video */
-document.documentElement.style.setProperty('--bg-page', BG)
-document.body.style.background = BG
-
 ;(async () => {
   const el   = document.getElementById('hero-visual')
   const load = document.getElementById('hero-loading')
   if (!el) return
 
-  console.log('[Hero] Iniciando… fondo:', BG)
+  console.log('[Hero] Iniciando…')
 
   await nearViewport(el, 400)
 
-  const scene = new HeroScene(el, BG)
-  scene.setBgColor(BG)
-
-  const src = `${import.meta.env.BASE_URL}video/kling_20260621_VIDEO_hazme_un_v_1414_0.mp4`
+  const scene = new HeroScene(el)
+  const src   = `${import.meta.env.BASE_URL}video/kling_20260621_VIDEO_hazme_un_v_1414_0.mp4`
 
   try {
     console.log('[Hero] Cargando video…')
-    const video = await scene.load(src)
-    console.log('[Hero] OK. Duración:', video.duration)
+    const { video, bgColor } = await scene.load(src)
+    console.log('[Hero] Video OK. Fondo detectado:', bgColor)
+
+    /* Aplicar el color detectado al fondo de la página */
+    document.documentElement.style.setProperty('--bg-page', bgColor)
+    document.body.style.background = bgColor
+
     load?.remove()
 
+    /* Render loop solo cuando visible */
     let running = false
     new IntersectionObserver(
       ([e]) => {
@@ -35,6 +32,7 @@ document.body.style.background = BG
       }, { threshold: 0.01 }
     ).observe(el)
 
+    /* GSAP ScrollTrigger */
     const [{ gsap }, { ScrollTrigger }] = await Promise.all([
       import('gsap'),
       import('gsap/ScrollTrigger'),
