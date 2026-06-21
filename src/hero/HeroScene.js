@@ -1,3 +1,5 @@
+import * as THREE from 'three'
+
 export class HeroScene {
   constructor(container) {
     this.container = container
