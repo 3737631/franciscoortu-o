@@ -1,7 +1,4 @@
 import * as THREE from 'three'
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
-import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { createChromaKeyMaterial } from './ChromaKeyShader.js'
 
 export class HeroScene {
@@ -11,18 +8,13 @@ export class HeroScene {
     this.w        = r.width
     this.h        = r.height
 
-    /* Renderer — sin alpha, fondo sólido como la página */
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: 'high-performance',
-    })
+    this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(this.w, this.h)
     this.renderer.setClearColor(0x020202)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.2
+    this.renderer.toneMappingExposure = 1.0
     container.appendChild(this.renderer.domElement)
 
     this.scene = new THREE.Scene()
@@ -32,25 +24,16 @@ export class HeroScene {
     this.camera = new THREE.OrthographicCamera(-a, a, 1, -1, 0.1, 100)
     this.camera.position.z = 1
 
-    this.composer = new EffectComposer(this.renderer)
-    this.composer.addPass(new RenderPass(this.scene, this.camera))
-
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(this.w, this.h),
-      1.8, 0.3, 0.7,
-    )
-    this.composer.addPass(this.bloomPass)
-
-    this.video      = null
-    this.texture    = null
-    this.material   = null
-    this.mesh       = null
-    this._ready     = false
+    this.video    = null
+    this.texture  = null
+    this.material = null
+    this.mesh     = null
+    this._ready   = false
     this._destroyed = false
-    this._raf       = null
+    this._raf     = null
 
-    this._onResize = () => this.resize()
-    window.addEventListener('resize', this._onResize)
+    this._resize = () => this.resize()
+    window.addEventListener('resize', this._resize)
   }
 
   async load(src, opts = {}) {
@@ -68,9 +51,8 @@ export class HeroScene {
       const ok = () => {
         video.removeEventListener('loadeddata', ok)
         video.removeEventListener('error', err)
-        /* Activa decoder: play + pause inmediato */
         video.play().then(() => video.pause()).catch(() => {})
-        this._buildScene(video, opts)
+        this._build(video, opts)
         this._ready = true
         resolve(video)
       }
@@ -81,7 +63,7 @@ export class HeroScene {
     })
   }
 
-  _buildScene(video, opts) {
+  _build(video, opts) {
     this.texture = new THREE.VideoTexture(video)
     this.texture.colorSpace = THREE.SRGBColorSpace
     this.texture.minFilter = THREE.LinearFilter
@@ -104,7 +86,7 @@ export class HeroScene {
     const loop = () => {
       if (this._destroyed) return
       if (this._ready && this.texture) this.texture.needsUpdate = true
-      this.composer.render()
+      this.renderer.render(this.scene, this.camera)
       this._raf = requestAnimationFrame(loop)
     }
     loop()
@@ -114,10 +96,10 @@ export class HeroScene {
     if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null }
   }
 
-  setTime(seconds) {
+  setTime(t) {
     if (!this.video || !this._ready) return
-    const t = Math.min(Math.max(seconds, 0), this.video.duration || 5)
-    try { this.video.currentTime = t } catch (_) {}
+    const s = Math.min(Math.max(t, 0), this.video.duration || 5)
+    try { this.video.currentTime = s } catch (_) {}
   }
 
   resize() {
@@ -125,7 +107,6 @@ export class HeroScene {
     const r = this.container.getBoundingClientRect()
     this.w = r.width; this.h = r.height
     this.renderer.setSize(this.w, this.h)
-    this.composer.setSize(this.w, this.h)
     const a = this.w / this.h
     this.camera.left = -a; this.camera.right = a
     this.camera.top = 1; this.camera.bottom = -1
@@ -145,7 +126,7 @@ export class HeroScene {
   destroy() {
     this._destroyed = true
     this.stop()
-    window.removeEventListener('resize', this._onResize)
+    window.removeEventListener('resize', this._resize)
     if (this.video && this.video.parentNode) this.video.parentNode.removeChild(this.video)
     this.texture?.dispose()
     this.material?.dispose()

@@ -1,100 +1,82 @@
 import { HeroScene } from './hero/HeroScene.js'
 
-/* ── Config desde URL params ─────────────────── */
-const params = new URLSearchParams(location.search)
-const VIDEO_PATH = `${import.meta.env.BASE_URL}video/kling_20260621_VIDEO_hazme_un_v_1414_0.mp4`
+/* Parámetros ajustables desde URL */
+const P = new URLSearchParams(location.search)
 
 const KEY_OPTIONS = {
-  keyColor:  hexToColor(params.get('key')  || '#e8e8e8'),
-  threshold: parseFloat(params.get('th')   || '0.12'),
-  softness:  parseFloat(params.get('soft') || '0.2'),
-  despill:   parseFloat(params.get('spill')|| '0.3'),
+  keyColor:  hexToColor(P.get('key')  || '#f0f0f0'),
+  threshold: +P.get('th')   || 0.1,
+  softness:  +P.get('soft') || 0.22,
+  despill:   +P.get('spill')|| 0.2,
 }
 
-const BLOOM = {
-  strength:  parseFloat(params.get('bloom')    || '1.8'),
-  radius:    parseFloat(params.get('radius')   || '0.3'),
-  threshold: parseFloat(params.get('bthresh')  || '0.7'),
-}
-
-/* ── Bootstrap ────────────────────────────────── */
 ;(async () => {
-  const container = document.getElementById('hero-visual')
-  const loadingEl  = document.getElementById('hero-loading')
-  if (!container) return
+  const el   = document.getElementById('hero-visual')
+  const load = document.getElementById('hero-loading')
+  if (!el) return
 
-  console.log('[Hero] Iniciando...')
-  await lazyLoadWhenNear(container, 400)
+  console.log('[Hero] Iniciando…')
 
-  const scene = new HeroScene(container)
+  await nearViewport(el, 400)
 
-  /* Ajustar bloom desde params */
-  scene.bloomPass.strength  = BLOOM.strength
-  scene.bloomPass.radius    = BLOOM.radius
-  scene.bloomPass.threshold = BLOOM.threshold
+  const scene = new HeroScene(el)
+  const src   = `${import.meta.env.BASE_URL}video/kling_20260621_VIDEO_hazme_un_v_1414_0.mp4`
 
   try {
-    console.log('[Hero] Cargando video...', VIDEO_PATH)
-    const video = await scene.load(VIDEO_PATH, KEY_OPTIONS)
-    console.log('[Hero] Video cargado, duración:', video.duration)
+    console.log('[Hero] Cargando video…')
+    const video = await scene.load(src, KEY_OPTIONS)
+    console.log('[Hero] OK. Duración:', video.duration)
+    load?.remove()
 
-    if (loadingEl) loadingEl.remove()
-
-    /* IntersectionObserver */
-    let rendering = false
-    const obs = new IntersectionObserver(
+    /* IntersectionObserver: solo renderiza si visible */
+    let running = false
+    new IntersectionObserver(
       ([e]) => {
-        if (e.isIntersecting && !rendering) { scene.start(); rendering = true; console.log('[Hero] Render ON') }
-        if (!e.isIntersecting && rendering)  { scene.stop();  rendering = false; console.log('[Hero] Render OFF') }
-      },
-      { threshold: 0.01 },
-    )
-    obs.observe(container)
+        if (e.isIntersecting && !running) { scene.start(); running = true }
+        if (!e.isIntersecting && running)  { scene.stop();  running = false }
+      }, { threshold: 0.01 }
+    ).observe(el)
 
-    /* GSAP ScrollTrigger */
+    /* GSAP ScrollTrigger – anima currentTime directamente */
     const [{ gsap }, { ScrollTrigger }] = await Promise.all([
       import('gsap'),
       import('gsap/ScrollTrigger'),
     ])
     gsap.registerPlugin(ScrollTrigger)
 
-    const duration = video.duration || 5
-    console.log('[Hero] ScrollTrigger creado, duración video:', duration)
+    const dur = video.duration || 5
+    console.log('[Hero] ScrollTrigger duración:', dur)
 
-    ScrollTrigger.create({
-      trigger: '#hero',
-      start:   'top top',
-      end:     'bottom top',
-      scrub:   1,
-      onUpdate: (self) => {
-        const t = self.progress * duration
-        scene.setTime(t)
+    gsap.to(video, {
+      currentTime: dur,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '#hero',
+        start: 'top top',
+        end: 'bottom top',
+        scrub: 1.2,
       },
     })
 
-    console.log('[Hero] Listo. Ajusta con: ?key=eee&th=0.12&soft=0.2&spill=0.3&bloom=1.8')
-    window.__hero = { scene, video, KEY_OPTIONS, BLOOM }
+    window.__hero = { scene, video, KEY_OPTIONS }
 
-  } catch (err) {
-    console.warn('[Hero] Error:', err.message)
-    if (loadingEl) loadingEl.textContent = 'Video no disponible'
+  } catch (e) {
+    console.warn('[Hero] Error:', e.message)
+    if (load) load.textContent = 'Error al cargar'
   }
 })()
 
-/* ── Helpers ──────────────────────────────────── */
-function lazyLoadWhenNear(el, margin = 400) {
-  return new Promise((resolve) => {
-    const r = el.getBoundingClientRect()
-    if (r.top < window.innerHeight + margin && r.bottom > -margin) return resolve()
-    const o = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { o.disconnect(); resolve() } },
-      { rootMargin: `${margin}px` },
-    )
+/* ── helpers ── */
+function nearViewport(el, m = 400) {
+  return new Promise(r => {
+    const b = el.getBoundingClientRect()
+    if (b.top < innerHeight + m && b.bottom > -m) return r()
+    const o = new IntersectionObserver(([e]) => { if (e.isIntersecting) { o.disconnect(); r() } }, { rootMargin: m + 'px' })
     o.observe(el)
   })
 }
 
-function hexToColor(hex) {
-  const n = parseInt(hex.replace('#', ''), 16)
+function hexToColor(h) {
+  const n = parseInt(h.replace('#', ''), 16)
   return { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 }
 }
